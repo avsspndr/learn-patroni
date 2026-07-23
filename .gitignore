@@ -18,10 +18,11 @@ coverage/
 venv/
 env/
 
-# Local environment overrides
-.env
-.env.*
-!.env.example
+# Local environment overrides in the repository root.
+# Versioned stand configuration lives in config/*.env.
+/.env
+/.env.*
+!/.env.example
 
 # Docker Compose local overrides
 docker-compose.override.yml
@@ -34,4 +35,3 @@ compose.override.yml
 *.swo
 .DS_Store
 Thumbs.db
-
