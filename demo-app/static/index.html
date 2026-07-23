@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Учебная служба заявок, работающая через кластер Patroni">
+  <title>Служба заявок · учебный кластер Patroni</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/">
+      <span class="brand-mark">СЗ</span>
+      <span><strong>Служба заявок</strong><small>прикладная нагрузка учебного кластера</small></span>
+    </a>
+    <nav aria-label="Другие части учебной среды">
+      <a href="http://localhost:8088/">Состояние кластера</a>
+      <a href="http://localhost:8088/course.html">Учебный курс</a>
+      <a href="http://localhost:8088/stand.html">О стенде</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">ПРИЛОЖЕНИЕ РАБОТАЕТ ТОЛЬКО ЧЕРЕЗ HAPROXY</p>
+        <h1>Посмотрите на отказоустойчивость глазами пользователя</h1>
+        <p>Создавайте заявки, меняйте их состояние и проводите переключения в панели Patroni. Приложение не знает имён db1 и db2: для записи и отчёта оно использует постоянные адреса.</p>
+      </div>
+      <div class="hero-state" id="overall-state">
+        <span class="pulse"></span>
+        <div><strong>Проверяем прикладные маршруты</strong><small>Выполняются настоящие запросы к PostgreSQL</small></div>
+      </div>
+    </section>
+
+    <section class="route-strip" aria-label="Состояние подключений приложения">
+      <article id="write-route" class="route-card loading">
+        <span class="route-icon">W</span>
+        <div><small>РАБОЧАЯ ДОСКА · HAPROXY:5000</small><strong>Проверяем запись…</strong><p>Создание заявок и изменение состояния</p></div>
+      </article>
+      <article id="read-route" class="route-card loading">
+        <span class="route-icon">R</span>
+        <div><small>СВОДНЫЙ ОТЧЁТ · HAPROXY:5001</small><strong>Проверяем реплику…</strong><p>Отдельный маршрут только для чтения</p></div>
+      </article>
+    </section>
+
+    <section class="workspace">
+      <div class="work-area">
+        <section class="create-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">НОВАЯ РАБОТА</p><h2>Создать заявку</h2></div>
+            <span class="transaction-note">заявка и запись истории сохраняются одной транзакцией</span>
+          </div>
+          <form id="ticket-form">
+            <label class="wide"><span>Тема</span><input name="title" maxlength="160" required placeholder="Например, проверить срок действия сертификата"></label>
+            <label class="wide"><span>Описание</span><textarea name="description" maxlength="2000" required placeholder="Что произошло и какой результат нужен"></textarea></label>
+            <label><span>Приоритет</span><select name="priority"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="low">Низкий</option></select></label>
+            <button class="primary" type="submit" id="create-ticket">Создать заявку</button>
+          </form>
+          <div id="create-result" class="form-result hidden" role="status"></div>
+        </section>
+
+        <section class="board-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">ТЕКУЩАЯ РАБОТА</p><h2>Доска заявок</h2></div>
+            <div class="section-actions"><span id="board-updated">обновление…</span><button type="button" id="refresh-board">Обновить</button></div>
+          </div>
+          <div class="board" id="board">
+            <section><header><span>Новые</span><b id="count-new">—</b></header><div class="ticket-list" data-status="new"></div></section>
+            <section><header><span>В работе</span><b id="count-in-progress">—</b></header><div class="ticket-list" data-status="in_progress"></div></section>
+            <section><header><span>Выполнены</span><b id="count-done">—</b></header><div class="ticket-list" data-status="done"></div></section>
+          </div>
+          <div id="board-error" class="empty-state hidden"></div>
+        </section>
+      </div>
+
+      <aside class="side-area">
+        <section class="report-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">ЧТЕНИЕ С РЕПЛИКИ</p><h2>Сводный отчёт</h2></div>
+            <button type="button" id="refresh-report">Обновить</button>
+          </div>
+          <p class="panel-copy">Отчёт строится через отдельный маршрут чтения. После изменения рабочей доски его показатели могут обновиться с задержкой.</p>
+          <div id="report-content" class="report-content loading-block">Получаем данные с реплики…</div>
+          <div id="report-error" class="empty-state hidden"></div>
+        </section>
+
+        <section class="simulation-panel">
+          <div class="simulation-heading">
+            <div><p class="eyebrow">ФОНОВАЯ НАГРУЗКА</p><h2>Учебные операторы</h2></div>
+            <label class="switch"><input id="simulation-toggle" type="checkbox"><span></span></label>
+          </div>
+          <p class="panel-copy">Когда имитация включена, приложение создаёт и обрабатывает заявки через тот же маршрут записи. Используйте её, чтобы заметить перерыв во время переключения.</p>
+          <p class="activity-scope">Журнал ниже включает ручные действия и работу учебных операторов в текущем сеансе приложения.</p>
+          <div class="activity-summary"><span><b id="activity-success">0</b> успешно</span><span><b id="activity-failure">0</b> с ошибкой</span></div>
+          <div class="activity-log" id="activity-log"><p>Операций пока нет.</p></div>
+        </section>
+
+        <details class="technical-panel">
+          <summary>Что приложение фактически проверяет</summary>
+          <div class="technical-content">
+            <p><strong>Рабочая доска</strong><span id="write-technical">нет данных</span></p>
+            <p><strong>Сводный отчёт</strong><span id="read-technical">нет данных</span></p>
+            <small>Эти сведения получены SQL-запросом через HAProxy. Состояние Patroni и DCS смотрите в панели кластера.</small>
+          </div>
+        </details>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="ticket-dialog">
+    <div class="dialog-heading"><div><p class="eyebrow">ЗАЯВКА</p><h2 id="dialog-title">Загрузка…</h2></div><button type="button" id="close-dialog" aria-label="Закрыть">×</button></div>
+    <div id="ticket-details" class="ticket-details"></div>
+    <form id="status-form" class="dialog-form">
+      <label><span>Состояние</span><select name="status"><option value="new">Новая</option><option value="in_progress">В работе</option><option value="done">Выполнена</option></select></label>
+      <label><span>Исполнитель</span><input name="assignee" maxlength="80" placeholder="Не назначен"></label>
+      <button class="primary" type="submit">Сохранить состояние</button>
+    </form>
+    <form id="comment-form" class="comment-form">
+      <label><span>Новый комментарий</span><textarea name="comment" maxlength="2000" required placeholder="Что было проверено или сделано"></textarea></label>
+      <label><span>Автор</span><input name="actor" maxlength="80" value="Пользователь"></label>
+      <button type="submit">Добавить комментарий</button>
+    </form>
+    <div id="event-list" class="event-list"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

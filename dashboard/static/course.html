@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Практический мини-курс по эксплуатации PostgreSQL-кластера под управлением Patroni">
+  <title>Практический курс Patroni</title>
+  <link rel="stylesheet" href="/course.css">
+</head>
+<body>
+  <a class="skip-link" href="#lesson">Перейти к уроку</a>
+  <header class="course-header">
+    <a class="brand" href="/course.html" aria-label="Начало курса">
+      <span class="brand-mark">P</span>
+      <span><strong>Patroni: эксплуатация</strong><small>интерактивный курс для системного администратора</small></span>
+    </a>
+    <div class="header-actions">
+      <button class="text-button open-glossary">Глоссарий</button>
+      <a class="text-button link-button" href="/stand.html">Паспорт стенда</a>
+      <a class="text-button link-button" href="http://localhost:8090/">Служба заявок</a>
+      <a class="dashboard-link" href="/">Открыть панель состояния <span>↗</span></a>
+    </div>
+  </header>
+
+  <section class="course-hero">
+    <div>
+      <p class="kicker">ТЕОРИЯ → ПРОВЕРОЧНЫЕ ТЕСТЫ → ПРАКТИЧЕСКИЙ ЭКЗАМЕН</p>
+      <h1>Изучите Patroni и самостоятельно соберите работающий кластер</h1>
+      <p class="hero-copy">Первые шесть модулей последовательно объясняют репликацию PostgreSQL, устройство Patroni, диагностику, управление, конфигурацию и восстановление после отказов. Проверочные тесты помогают закрепить теорию, а итоговый модуль предлагает самостоятельно развернуть и испытать отдельный кластер.</p>
+      <div class="hero-note"><strong>Как работать с материалом</strong><span>Изучите тему в курсе, затем откройте панель состояния и найдите её проявление в работающем стенде. Панель предназначена для наблюдения, вопросов «что будет, если» и управляемых экспериментов.</span></div>
+    </div>
+    <aside class="live-cluster" id="live-cluster" aria-live="polite">
+      <div class="live-heading"><span class="pulse"></span><strong>Состояние стенда</strong><small id="live-updated">подключение…</small></div>
+      <dl>
+        <div><dt>Первичный сервер</dt><dd id="live-primary">—</dd></div>
+        <div><dt>Узлы</dt><dd id="live-nodes">—</dd></div>
+        <div><dt>Репликация</dt><dd id="live-replication">—</dd></div>
+        <div><dt>Макс. отставание</dt><dd id="live-lag">—</dd></div>
+      </dl>
+    </aside>
+  </section>
+
+  <section class="overall-progress" aria-label="Прогресс курса">
+    <div><strong id="progress-title">Пройдено 0 из 7 модулей</strong><span id="progress-percent">0%</span></div>
+    <div class="progress-track"><i id="progress-bar"></i></div>
+  </section>
+
+  <div class="course-layout">
+    <aside class="course-sidebar">
+      <div class="sidebar-heading"><span>Маршрут</span><button id="reset-progress" title="Сбросить только учебный прогресс">Сбросить</button></div>
+      <nav id="module-nav" aria-label="Модули курса"></nav>
+      <div class="sidebar-outcome">
+        <strong>Результат курса</strong>
+        <p>Вы сможете самостоятельно настроить минимальный кластер Patroni, определить его состояние, изменить конфигурацию, выполнить переключение и восстановить резервирование после отказа.</p>
+      </div>
+    </aside>
+
+    <main id="lesson" class="lesson" tabindex="-1">
+      <div class="lesson-loading">Загружаем учебный модуль…</div>
+    </main>
+  </div>
+
+  <dialog id="glossary-dialog">
+    <div class="dialog-heading"><div><p class="kicker">ОПОРНЫЕ ТЕРМИНЫ</p><h2>Глоссарий</h2></div><button id="close-glossary" aria-label="Закрыть">×</button></div>
+    <div class="glossary-list" id="glossary-list"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <button class="glossary-fab open-glossary" aria-label="Открыть глоссарий">Глоссарий</button>
+  <script src="/course.js"></script>
+</body>
+</html>

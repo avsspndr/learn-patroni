@@ -1,0 +1,98 @@
+# Имя кластера Patroni. Все участники с одним scope считают себя частью
+# одного кластера и используют общий раздел в DCS.
+scope: postgresql-cluster
+
+# Имя конкретного участника. В стенде оно задаётся через переменную
+# PATRONI_NAME в config/db1.env и config/db2.env.
+# name: db1
+
+log:
+  # Уровень подробности журналов Patroni.
+  level: INFO
+
+etcd3:
+  # Адрес DCS. Patroni хранит в etcd состояние участников, лидерскую
+  # блокировку и динамическую конфигурацию, но не пользовательские данные.
+  hosts:
+    - etcd:2379
+
+restapi:
+  # Локальный адрес, на котором Patroni принимает REST API.
+  # HAProxy и дашборд используют этот API для проверки роли узла.
+  listen: 0.0.0.0:8008
+
+  # Адрес, который Patroni публикует в DCS для других участников.
+  # В стенде он задаётся через PATRONI_RESTAPI_CONNECT_ADDRESS.
+  # connect_address: db1:8008
+
+bootstrap:
+  # Bootstrap применяется только при первоначальном создании кластера.
+  # После инициализации часть настроек хранится в DCS как динамическая
+  # конфигурация и меняется через patronictl edit-config/show-config.
+  dcs:
+    postgresql:
+      # Позволяет Patroni использовать pg_rewind при возвращении бывшего
+      # primary в кластер как реплики, если истории WAL разошлись.
+      use_pg_rewind: true
+      parameters:
+        # Минимальный уровень WAL для физической репликации.
+        wal_level: "replica"
+
+      # Правила доступа, которые Patroni добавляет при создании PostgreSQL.
+      # В учебном стенде они открыты широко из-за Docker-сетей; для реальной
+      # среды сети, роли и методы аутентификации нужно ограничивать строже.
+      pg_hba:
+        - local   all             all                                      peer
+        - host    replication     replicator      0.0.0.0/0                scram-sha-256
+        - host    postgres        rewinder        0.0.0.0/0                scram-sha-256
+        - host    all             all             0.0.0.0/0                scram-sha-256
+
+  # Способ первичной инициализации каталога данных PostgreSQL.
+  method: initdb
+  initdb:
+    # Кодировка новой базы.
+    - encoding: UTF8
+
+    # Включает контрольные суммы страниц данных.
+    - data-checksums
+
+postgresql:
+  parameters:
+    # Каталог Unix-сокета PostgreSQL. Нужен Patroni и локальным проверкам.
+    unix_socket_directories: "/var/run/postgresql"
+
+  authentication:
+    # Административная роль PostgreSQL.
+    superuser:
+      username: postgres
+      password: postgres
+
+    # Роль, через которую реплика получает WAL с primary.
+    replication:
+      username: replicator
+      password: replicator
+
+    # Роль для pg_rewind при возврате бывшего primary в кластер.
+    rewind:
+      username: rewinder
+      password: rewinder
+
+  # Каталог данных PostgreSQL. В Compose он хранится в отдельном volume
+  # для каждого участника.
+  data_dir: /var/lib/postgresql/data
+
+  # Файл с паролями, который Patroni использует для служебных подключений.
+  pgpass: /var/lib/postgresql/.pgpass
+
+  # Адрес PostgreSQL, который участник публикует для других узлов.
+  # В стенде он задаётся через PATRONI_CONNECT_ADDRESS.
+  # connect_address: db1:5432
+
+  # На каких интерфейсах PostgreSQL принимает подключения внутри контейнера.
+  listen: 0.0.0.0:5432
+
+  # Разрешает Patroni использовать локальный Unix-сокет PostgreSQL.
+  use_unix_socket: true
+
+  # Каталог с исполняемыми файлами PostgreSQL внутри образа.
+  bin_dir: /usr/lib/postgresql/18/bin

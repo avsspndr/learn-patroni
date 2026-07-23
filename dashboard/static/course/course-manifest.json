@@ -1,0 +1,77 @@
+{
+  "version": 3,
+  "title": "Patroni: эксплуатация",
+  "glossary": "/course/glossary.json",
+  "modules": [
+    {
+      "id": "postgres-replication",
+      "number": 1,
+      "title": "От одного PostgreSQL к работающей реплике",
+      "shortTitle": "Как работает репликация",
+      "type": "Основные понятия и наблюдение",
+      "duration": "50–65 минут",
+      "revision": 3,
+      "source": "/course/modules/01-postgres-replication.json"
+    },
+    {
+      "id": "ha-architecture",
+      "number": 2,
+      "title": "Как Patroni превращает репликацию в отказоустойчивый кластер",
+      "shortTitle": "От репликации к Patroni",
+      "type": "Сценарий отказа и разбор архитектуры",
+      "duration": "55–70 минут",
+      "revision": 6,
+      "source": "/course/modules/02-ha-architecture.json"
+    },
+    {
+      "id": "patroni-concepts",
+      "number": 3,
+      "title": "Как определить состояние кластера с помощью patronictl",
+      "shortTitle": "Диагностика patronictl",
+      "type": "Модель состояния и практическая диагностика",
+      "duration": "70–85 минут",
+      "revision": 6,
+      "source": "/course/modules/03-patroni-concepts.json"
+    },
+    {
+      "id": "cluster-operations",
+      "number": 4,
+      "title": "Управление кластером через patronictl",
+      "shortTitle": "Управление кластером",
+      "type": "Типовые операции и безопасный порядок действий",
+      "duration": "85–105 минут",
+      "revision": 6,
+      "source": "/course/modules/04-cluster-operations.json"
+    },
+    {
+      "id": "patroni-configuration",
+      "number": 5,
+      "title": "Как устроена конфигурация Patroni",
+      "shortTitle": "Конфигурация Patroni",
+      "type": "Первоначальная настройка, источники и применение изменений",
+      "duration": "95–120 минут",
+      "revision": 7,
+      "source": "/course/modules/05-patroni-configuration.json"
+    },
+    {
+      "id": "incident-recovery",
+      "number": 6,
+      "title": "Отказы и восстановление кластера",
+      "shortTitle": "Отказы и восстановление",
+      "type": "Диагностика инцидента и выбор действия",
+      "duration": "60–75 минут",
+      "revision": 6,
+      "source": "/course/modules/06-incident-recovery.json"
+    },
+    {
+      "id": "practical-exam",
+      "number": 7,
+      "title": "Итоговый практический экзамен",
+      "shortTitle": "Практический экзамен",
+      "type": "Самостоятельное развёртывание и управление кластером",
+      "duration": "3–5 часов",
+      "revision": 7,
+      "source": "/course/modules/07-practical-exam.json"
+    }
+  ]
+}

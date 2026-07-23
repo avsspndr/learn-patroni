@@ -1,0 +1,171 @@
+services:
+  # DCS: хранит состояние Patroni, лидерскую блокировку и динамическую конфигурацию.
+  etcd:
+    image: quay.io/coreos/etcd:v3.7.0
+    env_file:
+      - ./config/etcd.env
+    volumes:
+      - etcd_data:/var/lib/etcd
+    networks:
+      - cluster
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Узлы PostgreSQL под управлением Patroni.
+  db1:
+    image: localhost/patroni:1.0.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      etcd:
+        condition: service_healthy
+    env_file:
+      - ./config/db1.env
+    volumes:
+      - ./config/patroni.yml:/etc/patroni/config.yml:ro
+      - db1_data:/var/lib/postgresql/data
+    networks:
+      - cluster
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/liveness', timeout=2).close()"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  db2:
+    image: localhost/patroni:1.0.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      etcd:
+        condition: service_healthy
+    env_file:
+      - ./config/db2.env
+    volumes:
+      - ./config/patroni.yml:/etc/patroni/config.yml:ro
+      - db2_data:/var/lib/postgresql/data
+    networks:
+      - cluster
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/liveness', timeout=2).close()"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  # Точка входа: направляет запись на primary, чтение на replica.
+  haproxy:
+    image: haproxy:3.0-alpine
+    depends_on:
+      db1:
+        condition: service_started
+      db2:
+        condition: service_started
+    volumes:
+      - ./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - cluster
+      - client
+    restart: unless-stopped
+
+  # Разовая подготовка учебной базы и пользователя приложения.
+  demo-init:
+    image: localhost/patroni-demo-app:1.0.0
+    build:
+      context: ./demo-app
+      dockerfile: Dockerfile
+    depends_on:
+      haproxy:
+        condition: service_started
+    env_file:
+      - ./config/demo.env
+    environment:
+      DEMO_DB_ADMIN_USER: postgres
+      DEMO_DB_ADMIN_PASSWORD: postgres
+    entrypoint: ["python", "/app/init_db.py"]
+    networks:
+      - client
+    restart: "no"
+
+  # Учебное приложение: создаёт нагрузку через HAProxy.
+  demo-app:
+    image: localhost/patroni-demo-app:1.0.0
+    build:
+      context: ./demo-app
+      dockerfile: Dockerfile
+    depends_on:
+      demo-init:
+        condition: service_completed_successfully
+    env_file:
+      - ./config/demo.env
+    networks:
+      - client
+    ports:
+      - 127.0.0.1:8090:8080
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).close()"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Дашборд: читает Patroni REST API и etcd API для объяснения состояния стенда.
+  dashboard:
+    image: localhost/patroni-dashboard:1.0.0
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    depends_on:
+      db1:
+        condition: service_started
+      db2:
+        condition: service_started
+      demo-app:
+        condition: service_started
+    env_file:
+      - ./config/dashboard.env
+    networks:
+      - cluster
+    ports:
+      - 127.0.0.1:8088:8080
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).close()"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  etcd_data:
+  db1_data:
+  db2_data:
+
+# cluster: служебная сеть Patroni, PostgreSQL, etcd и дашборда.
+# client: сеть клиентского доступа к PostgreSQL через HAProxy.
+networks:
+  cluster:
+  client:

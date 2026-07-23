@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Учебный стенд Patroni</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <header class="dashboard-hero">
+      <div class="hero-main">
+        <p class="eyebrow">УЧЕБНЫЙ СТЕНД</p>
+        <h1>Patroni: курс и рабочий кластер</h1>
+        <p class="subtitle">Здесь можно изучить устройство отказоустойчивого кластера PostgreSQL, создать прикладную нагрузку и увидеть, как Patroni управляет узлами в реальном времени.</p>
+        <a class="stand-context-link" href="/stand.html">Состав и ограничения этого стенда →</a>
+      </div>
+      <aside class="lab-status" aria-label="Состояние учебного стенда">
+        <div class="live" id="live-status"><span></span><strong>данные загружаются</strong></div>
+        <h2>Здесь показано текущее состояние стенда</h2>
+        <p id="lab-status-detail">Подключаемся к Patroni REST API и etcd…</p>
+        <small>Индикатор сообщает только о свежести данных панели. Доступность записи, реплики и DCS оценивается отдельно ниже.</small>
+      </aside>
+      <nav class="learning-route" aria-label="Разделы учебной среды">
+        <a class="journey-card course-step" id="course-progress-link" href="/course.html"><div><small>ТЕОРИЯ</small><strong>Учебный курс</strong><p>Репликация PostgreSQL, устройство Patroni, диагностика, конфигурация и управление кластером.</p><b data-course-action>Открыть курс</b><em data-course-progress>7 модулей</em></div></a>
+        <a class="journey-card app-step" href="http://localhost:8090/"><div><small>ПРИКЛАДНАЯ НАГРУЗКА</small><strong>Служба заявок</strong><p>Рабочая база данных стенда. Здесь можно создавать и изменять записи, а также включать автоматическую нагрузку.</p><b>Открыть приложение</b></div></a>
+        <a class="journey-card dashboard-step" href="?view=overview#dashboard-start"><div><small>НАБЛЮДЕНИЕ И УПРАВЛЕНИЕ</small><strong>Панель состояния</strong><p>Текущие роли узлов, состояние DCS и маршрутов, репликация, история и учебные операции с кластером.</p><b>Открыть панель</b></div></a>
+      </nav>
+      <div class="lab-boundary"><p><strong>Наблюдение безопасно:</strong> просмотр состояния ничего не изменяет. Действия во вкладке «Управление» влияют на стенд; перед выполнением панель показывает условия, последствия и признаки успешного завершения.</p></div>
+    </header>
+
+    <section class="summary" id="dashboard-start" aria-label="Краткое состояние кластера">
+      <div class="summary-item"><span>Первичный сервер</span><strong id="leader">—</strong></div>
+      <div class="summary-item"><span>Patroni API отвечают</span><strong id="reachable">—</strong></div>
+      <div class="summary-item"><span>Имя кластера</span><strong id="scope">—</strong></div>
+      <div class="summary-item"><span>Наибольшее отставание реплики</span><strong id="max-lag">—</strong></div>
+      <div class="summary-item"><span>Автоматическое переключение</span><strong id="cluster-mode">—</strong></div>
+      <div class="summary-item"><span>Последний опрос</span><strong id="updated">—</strong></div>
+    </section>
+    <details class="api-sources" aria-label="Источники данных панели">
+      <summary><span class="api-source-icon">API</span><p><strong>Источники данных</strong><small>Панель строит выводы по данным Patroni REST API и API etcd, а не только по цвету индикаторов.</small></p><span class="api-expand">Показать адреса API</span></summary>
+      <div class="api-source-groups">
+        <span><b>Узлы</b> <code id="node-api-sources">/patroni · /read-write · /read-only · /metrics</code></span>
+        <span><b>Кластер</b> <code>/cluster · /config · /history</code> на первом доступном узле</span>
+        <span><b>etcd</b> <code>:2379/health · /metrics · /v3/cluster/member/list</code></span>
+      </div>
+      <p class="api-proxy-note">Браузер опрашивает <code>GET /api/cluster</code>; сервер панели собирает перечисленные данные с компонентов стенда.</p>
+    </details>
+
+    <nav class="view-tabs" aria-label="Разделы панели состояния">
+      <button class="active" data-view-target="overview">1. Состояние</button>
+      <button data-view-target="replication">2. Репликация</button>
+      <button data-view-target="metrics">3. Состояние узлов</button>
+      <button data-view-target="control">4. Управление</button>
+      <button data-view-target="history">5. История</button>
+    </nav>
+
+    <section class="view active" data-view="overview">
+      <article class="diagnostics-panel">
+        <div class="section-heading">
+          <div><p class="section-kicker">БЫСТРАЯ ДИАГНОСТИКА</p><h2>Можно ли считать кластер работоспособным?</h2></div>
+          <span id="diagnostic-verdict" class="health-pill">проверка…</span>
+        </div>
+        <div id="diagnostic-summary" class="diagnostic-summary"><strong>Определяем доступность записи…</strong><p>Проверяем маршрут HAProxy и текущие роли узлов.</p></div>
+        <section id="dcs-outage-explainer" class="dcs-outage-explainer hidden" aria-live="polite">
+          <div class="dcs-outage-heading"><span>DCS НЕДОСТУПЕН</span><strong>Почему Patroni и чтение при этом могут оставаться доступными</strong></div>
+          <p>DCS нужен Patroni для согласования ролей, но Patroni и PostgreSQL продолжают работать на каждом узле самостоятельно. Поэтому ответ REST API ещё не означает, что узел может безопасно стать первичным сервером.</p>
+          <div class="dcs-outage-effects">
+            <div><strong>Patroni REST API</strong><span>Продолжает показывать локальное состояние процесса и PostgreSQL, даже когда связь с etcd потеряна.</span></div>
+            <div><strong>Первичный сервер и запись</strong><span>Если не включён DCS Failsafe Mode и Patroni не может продлить лидерскую блокировку (<code>leader lock</code>), он должен понизить первичный сервер или запретить на нём запись.</span></div>
+            <div><strong>Реплика и чтение</strong><span>Реплика может оставаться запущенной, применять полученный WAL и обслуживать запросы только на чтение. Но без DCS она не может получить право стать новым первичным сервером.</span></div>
+          </div>
+          <p class="dcs-outage-route"><strong>Что означает зелёный маршрут чтения:</strong> HAProxy отвечает и через Patroni API видит реплику, готовую принимать подключения. Это не подтверждает доступность DCS и не означает, что панель выполнила пробный SQL-запрос.</p>
+        </section>
+        <div class="diagnostic-list" id="diagnostics"></div>
+      </article>
+
+      <article class="cluster-panel architecture-panel">
+        <div class="section-heading">
+          <div><p class="section-kicker">ОБЩАЯ КАРТИНА</p><h2>Как устроен этот кластер прямо сейчас</h2></div>
+          <div class="architecture-status"><span id="replication-mode" class="health-pill mode-pill">режим репликации…</span><span id="topology-health" class="health-pill">—</span></div>
+        </div>
+        <p class="panel-intro">Сплошные стрелки показывают путь клиентских подключений и данных. Пунктирные связи — управление и координацию: Patroni управляет PostgreSQL, а etcd хранит право текущего лидера принимать запись.</p>
+        <div class="architecture-diagram" role="img" aria-label="Клиент подключается к HAProxy, HAProxy направляет запись на первичный сервер, первичный сервер передаёт WAL реплике, Patroni согласует роли через etcd">
+          <div class="architecture-lane client-lane">
+            <div class="architecture-box neutral"><span class="architecture-icon">A</span><strong>Приложение</strong><small>не запоминает адрес конкретного узла</small></div>
+          </div>
+          <div class="architecture-arrow"><span>SQL-соединение</span>→</div>
+          <div class="architecture-lane proxy-lane">
+            <div class="architecture-box proxy"><span class="architecture-icon">H</span><strong>HAProxy</strong><small>выбирает адрес по текущей роли</small></div>
+            <div class="proxy-routes"><span>запись · :5000</span><span>чтение · :5001</span></div>
+          </div>
+          <div class="architecture-arrow"><span>запись</span>→</div>
+          <div class="architecture-lane database-lane">
+            <div class="architecture-box primary-db"><span class="architecture-icon">P</span><strong id="architecture-primary">первичный сервер: —</strong><small>принимает изменения</small></div>
+            <div class="wal-connector"><span>WAL: изменения базы</span>→</div>
+            <div class="architecture-box replica-db"><span class="architecture-icon">R</span><strong id="architecture-replicas">реплика: —</strong><small>получает и применяет WAL</small></div>
+          </div>
+          <div class="coordination-layer">
+            <div><strong>Patroni на каждом узле</strong><small>проверяет и управляет локальным PostgreSQL</small></div>
+            <span class="coordination-line">- - - координация ролей - - -</span>
+            <div><strong>etcd · DCS</strong><small>лидерская блокировка и общая конфигурация</small><span id="architecture-etcd" class="dcs-topology-badge">проверяем участников…</span></div>
+          </div>
+        </div>
+        <div class="architecture-legend"><span><b>HAProxy</b> не переключает роли</span><span><b>Patroni</b> не копирует данные</span><span><b>etcd</b> не хранит WAL</span></div>
+        <div class="replication-mode-explainer" id="replication-mode-explainer">
+          <div><span class="mode-icon">A</span><strong>Асинхронная репликация · asynchronous</strong></div>
+          <p>Определяем действующий режим Patroni…</p>
+        </div>
+        <div class="dcs-explainer">
+          <div class="dcs-heading"><strong>Что связывает Patroni и etcd</strong><span>DCS хранит состояние участников, общие настройки и временное право одного узла быть лидером.</span></div>
+          <div class="leader-lock-definition"><span>LEADER LOCK</span><p><strong>Лидерская блокировка — временная запись о том, какой участник сейчас имеет право управлять первичным сервером.</strong> Patroni должен регулярно продлевать её; после истечения новое право сможет получить только один участник.</p></div>
+          <p><strong>Что сопоставить:</strong> имя первичного сервера, владельца лидерской блокировки и доступность DCS. Подробный механизм переключения разобран в <a href="/course.html?module=ha-architecture">модуле 2</a>.</p>
+        </div>
+      </article>
+
+      <article class="cluster-panel topology-panel">
+        <div class="section-heading">
+          <div><p class="section-kicker">ТЕКУЩИЙ ПУТЬ WAL</p><h2>Кто принимает запись и кто за ним следует</h2></div>
+        </div>
+        <div class="role-map" id="role-map"></div>
+        <div class="topology-table" id="topology"></div>
+        <p class="panel-error hidden" id="topology-error"></p>
+      </article>
+
+      <section class="overview-explain-grid">
+        <article class="cluster-panel policy-panel">
+          <div class="section-heading"><div><p class="section-kicker">ЕСЛИ ПЕРВИЧНЫЙ СЕРВЕР ПЕРЕСТАНЕТ РАБОТАТЬ</p><h2>Как Patroni примет решение о переключении</h2></div></div>
+          <p class="panel-intro">Patroni не выбирает новый первичный сервер только потому, что прежний перестал отвечать. Узлы должны согласовать решение через DCS: сначала истекает прежнее право на лидерство, затем одна подходящая реплика получает новое.</p>
+          <div class="dcs-decision-flow" aria-label="Принятие решения Patroni через DCS">
+            <div><span>1</span><strong>Блокировка не продлена</strong><small>DCS ждёт истечения <code>ttl</code>; краткий сетевой сбой ещё не означает переключение.</small></div><b>→</b>
+            <div><span>2</span><strong>Реплики проверяют себя</strong><small>Каждая Patroni сверяет состояние PostgreSQL, отставание и ограничения конфигурации.</small></div><b>→</b>
+            <div><span>3</span><strong>Один узел получает право стать лидером</strong><small>Атомарная запись в DCS не позволяет выбрать сразу двух победителей.</small></div><b>→</b>
+            <div><span>4</span><strong>Только затем повышается реплика</strong><small>Patroni переводит PostgreSQL победившего узла в роль первичного сервера.</small></div>
+          </div>
+          <div class="policy-steps" id="failover-policy"></div>
+          <details class="fencing-explainer">
+            <summary>Почему лидерской блокировки недостаточно: защита от двух первичных серверов</summary>
+            <div class="fencing-content">
+            <div class="fencing-heading"><div><span class="fencing-icon">F</span><strong>Изоляция (fencing): не допустить запись на двух серверах</strong></div><span class="health-pill warning">сторожевой таймер не настроен</span></div>
+            <p class="fencing-problem"><strong>Зачем это нужно.</strong> При разрыве сети прежний первичный сервер может продолжать обслуживать открытые соединения, хотя его лидерская блокировка в DCS уже истекла. Если в этот момент повысить реплику, оба узла смогут принимать разные изменения — возникнет раздвоение кластера (<code>split-brain</code>).</p>
+            <div class="fencing-sequence">
+              <div><span>1</span><strong>Потеря DCS</strong><small>Patroni на прежнем первичном сервере не может продлить лидерскую блокировку.</small></div>
+              <b>→</b>
+              <div><span>2</span><strong>Самоизоляция</strong><small>Patroni должен понизить или остановить локальный PostgreSQL.</small></div>
+              <b>→</b>
+              <div><span>3</span><strong>Новая лидерская блокировка</strong><small>Только после освобождения права реплика получает блокировку и повышается до первичного сервера.</small></div>
+            </div>
+            <div class="fencing-layers">
+              <div><strong>Что защищает сейчас</strong><p>Лидерская блокировка определяет право на запись, а работающий Patroni выполняет самоизоляцию (<code>self-fencing</code>): останавливает или понижает PostgreSQL при потере DCS.</p></div>
+              <div class="fencing-limit"><strong>Граница этого стенда</strong><p>Сторожевой таймер (<code>watchdog</code>) не настроен. Если Patroni или вся ОС зависнет и не сможет выполнить самоизоляцию, стенд не гарантирует остановку прежнего первичного сервера.</p></div>
+              <div><strong>Что не обеспечивает изоляцию</strong><p>HAProxy перестанет направлять новые соединения на прежний первичный сервер, но не остановит PostgreSQL и не гарантирует разрыв уже открытых соединений.</p></div>
+            </div>
+            <p class="fencing-summary"><strong>Правильный порядок:</strong> сначала гарантированно запретить запись на прежнем первичном сервере, затем повышать реплику. В промышленной среде для этого используют сторожевой таймер (<code>watchdog</code>) или внешнее отключение узла (STONITH).</p>
+            </div>
+          </details>
+          <details class="config-details"><summary>Показать исходные параметры Patroni</summary><dl class="config-list" id="cluster-config"></dl></details>
+          <div id="scheduled-switchover" class="scheduled hidden"></div>
+        </article>
+
+        <article class="cluster-panel routing-panel">
+          <div class="section-heading"><div><p class="section-kicker">ЗАЧЕМ НУЖЕН HAPROXY</p><h2>Стабильные адреса для приложения</h2></div></div>
+          <p class="panel-intro">Роли db1 и db2 могут поменяться, но приложение продолжает подключаться к одному адресу. HAProxy проверяет Patroni и направляет каждое новое соединение на узел подходящей роли. Уже открытое соединение он не переносит.</p>
+          <section class="entrypoints" id="entrypoints"></section>
+          <div class="routing-note"><strong>Как выбирать маршрут</strong><span><code>:5000</code> — запросы, которые могут изменять данные. <code>:5001</code> — отдельная нагрузка только на чтение; на реплике изменения могут появиться немного позже, чем на первичном сервере.</span></div>
+        </article>
+      </section>
+
+      <div class="section-divider"><span>Технические сведения об узлах</span></div>
+      <section class="nodes overview-nodes" id="nodes" aria-live="polite"></section>
+    </section>
+
+    <section class="view" data-view="replication">
+      <section class="learning-panel collapsible-help">
+        <div class="section-heading">
+          <div><p class="section-kicker">КТО, ОТ КОГО И ЗАЧЕМ</p><h2 id="replication-direction-title">Первичный сервер передаёт изменения реплике</h2></div>
+        </div>
+        <p class="panel-intro" id="replication-direction-copy">Определяем текущие роли…</p>
+        <div class="wal-flow">
+          <div class="wal-stage"><span class="stage-number">1</span><div><strong id="wal-source">Первичный сервер (primary)</strong><small>принимает SQL-запись и формирует WAL</small></div></div>
+          <span class="flow-arrow">→</span>
+          <div class="wal-stage wal-stream-stage"><span class="stage-number">2</span><div><strong>Поток WAL</strong><small>PostgreSQL передаёт физические изменения, а не SQL-запросы</small></div></div>
+          <span class="flow-arrow">→</span>
+          <div class="wal-stage"><span class="stage-number">3</span><div><strong id="wal-target">Реплика (replica)</strong><small>получает WAL и воспроизводит изменения</small></div></div>
+        </div>
+        <div class="why-replicate"><strong>Зачем это происходит</strong><p id="why-replication-copy">Если первичный сервер станет недоступен, Patroni сможет повысить достаточно актуальную реплику. Репликация уменьшает время восстановления, но не заменяет резервную копию.</p></div>
+        <div class="lag-legend">
+          <span><i class="dot network"></i><strong>WAL ещё не получен</strong> — отставание при получении (<code>receive lag</code>); причина не обязательно в сети</span>
+          <span><i class="dot apply"></i><strong>WAL ещё не применён</strong> — очередь применения (<code>replay queue</code>) на самой реплике</span>
+          <span><i class="dot total"></i><strong>Полное отставание</strong> — <code>replay lag</code> относительно первичного сервера</span>
+        </div>
+      </section>
+      <section class="replication-cards" id="replication-cards"></section>
+    </section>
+
+    <section class="view" data-view="metrics">
+      <div class="view-intro"><h2>Состояние узлов</h2><p>Карточки Patroni показывают локальное состояние каждого узла. Узел может отвечать и обслуживать чтение даже при недоступном DCS; возможность согласовать роли показана отдельно в блоке etcd.</p></div>
+      <article class="cluster-panel etcd-health-panel">
+        <div class="section-heading"><div><p class="section-kicker">DCS · ETCD</p><h2>Способен ли DCS согласовывать решения Patroni?</h2></div><span id="etcd-verdict" class="health-pill">проверка…</span></div>
+        <p class="panel-intro">Здесь показаны только сигналы, влияющие на координацию Patroni. Внутренний лидер Raft в etcd и первичный сервер PostgreSQL выполняют разные задачи.</p>
+        <div class="etcd-health-grid" id="etcd-health"></div>
+        <p class="etcd-health-note" id="etcd-topology-note"></p>
+      </article>
+      <section class="metrics-cards" id="metrics-cards"></section>
+    </section>
+
+    <section class="view" data-view="control">
+      <section class="control-panel">
+        <div class="section-heading">
+          <div><p class="section-kicker">ИССЛЕДОВАНИЕ И УПРАВЛЕНИЕ</p><h2>Что вы хотите сделать?</h2></div>
+          <span class="local-only">доступно только с локального компьютера</span>
+        </div>
+        <p class="control-intro">Выберите учебную задачу. Панель покажет условия и возможные последствия, а после выполнения автоматически проверит результат.</p>
+        <aside class="production-context"><strong>Как учебные действия соотносятся с работой администратора</strong><span>Кнопки помогают исследовать стенд и наблюдать результат. В обычной эксплуатации администратор выполняет такие операции через <code>patronictl</code>; REST API чаще используют балансировщики, системы мониторинга и средства автоматизации. Для каждой задачи ниже приведены соответствующие команды.</span></aside>
+        <section class="control-preflight"><div class="control-preflight-heading"><strong>Готовность стенда</strong><span id="control-preflight-verdict" class="health-pill">проверка…</span></div><div id="control-preflight" class="control-preflight-grid"></div></section>
+        <nav class="control-intents" aria-label="Задачи управления">
+          <button class="active" data-control-target="switchover"><span>1</span><strong>Сменить первичный сервер</strong><small>плановое переключение · switchover</small></button>
+          <button data-control-target="maintenance"><span>2</span><strong>Обслужить узел</strong><small>перезапуск или перечитывание конфигурации</small></button>
+          <button data-control-target="experiments"><span>3</span><strong>Провести эксперимент</strong><small>отказ реплики, первичного сервера или DCS</small></button>
+          <button data-control-target="advanced"><span>4</span><strong>Ручное обслуживание</strong><small>ограничение и возобновление автоматических действий</small></button>
+        </nav>
+
+        <section class="control-task active" data-control-view="switchover">
+          <div class="task-heading"><div><span>ПЛАНОВОЕ ПЕРЕКЛЮЧЕНИЕ · SWITCHOVER</span><h3>Передать запись другому узлу</h3></div><b class="risk-level medium">соединения разорвутся</b></div>
+          <div class="task-columns"><div><strong>Что произойдёт</strong><p>Текущий первичный сервер будет понижен, а выбранная реплика в состоянии <code>streaming</code> — повышена. HAProxy направит новые подключения для записи на неё.</p></div><div><strong>Критерий успеха</strong><p>Выбранный узел стал первичным сервером, запись доступна, а прежний первичный сервер вернулся в кластер как реплика.</p></div></div>
+          <div class="switchover-form"><span id="switchover-from">Первичный сервер: —</span><b>→</b><select id="switchover-candidate" aria-label="Новый первичный сервер"></select><button id="switchover-button" class="primary-action">Сменить первичный сервер</button></div>
+          <small id="switchover-disabled-reason" class="disabled-reason"></small>
+          <details class="production-guide"><summary>Как выполнить плановое переключение (<code>switchover</code>) в реальной эксплуатации</summary><div class="production-guide-body"><p><strong>Обычно используют <code>patronictl</code>:</strong> команда проверит состояние кластера и обратится к Patroni. Без <code>--force</code> она запросит подтверждение.</p><div class="command-copy"><code id="prod-switchover-cli">patronictl …</code><button data-copy-command="prod-switchover-cli">Копировать</button></div><p><strong>Ту же операцию можно запросить через REST API текущего первичного сервера:</strong></p><div class="command-copy"><code id="prod-switchover-rest">curl …</code><button data-copy-command="prod-switchover-rest">Копировать</button></div><small>После команды проверьте новый первичный сервер, доступность записи, состояние прежнего первичного сервера и отставание репликации. Код HTTP 200 или 202 означает, что запрос принят, но не подтверждает завершение переключения.</small></div></details>
+        </section>
+
+        <section class="control-task" data-control-view="maintenance">
+          <div class="task-heading"><div><span>ОБСЛУЖИВАНИЕ НОДЫ</span><h3>Сначала выберите цель</h3></div><b class="risk-level low">штатные операции Patroni</b></div>
+          <fieldset class="node-selector"><legend>Узлы для этой операции</legend><label><input type="checkbox" name="control-node" value="db1"> <span>db1</span><small id="control-db1-state">—</small></label><label><input type="checkbox" name="control-node" value="db2"> <span>db2</span><small id="control-db2-state">—</small></label></fieldset>
+          <div class="maintenance-grid">
+            <article class="operation-card"><div class="operation-title"><span>RESTART</span><strong>Перезапустить PostgreSQL</strong></div><p id="restart-impact">Выберите узел — здесь появится описание влияния на доступность.</p><small>Критерий успеха: значение <code>postmaster_start_time</code> изменилось, PostgreSQL работает, а реплика вернулась в состояние <code>streaming</code>.</small><div class="button-row"><button data-action="postgres_restart">Перезапустить выбранный узел</button></div><small id="restart-disabled-reason" class="disabled-reason"></small></article>
+            <article class="operation-card"><div class="operation-title"><span>RELOAD</span><strong>Перечитать локальный YAML-файл Patroni</strong></div><p>Patroni перечитает локальную конфигурацию без перезапуска PostgreSQL. Динамические параметры в DCS не изменятся.</p><small>REST API подтверждает только принятие команды. Чтобы убедиться в результате, отдельно проверьте ожидаемые параметры.</small><div class="button-row"><button data-action="reload">Перечитать на выбранных узлах</button></div><small id="reload-disabled-reason" class="disabled-reason"></small></article>
+          </div>
+          <details class="production-guide"><summary>Как выполнить перезапуск или перечитать конфигурацию в реальной эксплуатации</summary><div class="production-guide-body"><p><strong>Перезапуск (<code>restart</code>) выбранного PostgreSQL под управлением Patroni:</strong></p><div class="command-copy"><code id="prod-restart-cli">patronictl … restart</code><button data-copy-command="prod-restart-cli">Копировать</button></div><div class="command-copy"><code id="prod-restart-rest">curl … /restart</code><button data-copy-command="prod-restart-rest">Копировать</button></div><p><strong>Перечитывание локальной конфигурации Patroni (<code>reload</code>):</strong></p><div class="command-copy"><code id="prod-reload-cli">patronictl … reload</code><button data-copy-command="prod-reload-cli">Копировать</button></div><div class="command-copy"><code id="prod-reload-rest">curl … /reload</code><button data-copy-command="prod-reload-rest">Копировать</button></div><small>В рабочей среде узлы обслуживают по одному, обычно начиная с реплик. Команда <code>systemctl restart postgresql</code> действует в обход Patroni, поэтому для штатного обслуживания её использовать не следует.</small></div></details>
+        </section>
+
+        <section class="control-task" data-control-view="experiments">
+          <div class="task-heading"><div><span>УЧЕБНЫЕ ЭКСПЕРИМЕНТЫ</span><h3>Создать отказ и наблюдать реакцию</h3></div><b class="risk-level medium">команды выполняются в терминале</b></div>
+          <p class="task-intro">Панель не управляет Docker напрямую и не обладает системными правами. Скопируйте команду и выполните её в терминале. Затем вернитесь в панель: она автоматически покажет, как изменилось состояние кластера.</p>
+          <div class="experiment-grid">
+            <article class="experiment-card"><strong>Потеря реплики</strong><p>Запись должна сохраниться, но резервирование исчезнет.</p><code id="experiment-stop-replica">docker compose stop …</code><button data-copy-command="experiment-stop-replica">Копировать команду</button><small>Вернуть: <code id="experiment-start-replica">docker compose start …</code></small></article>
+            <article class="experiment-card"><strong>Потеря первичного сервера</strong><p>Patroni должен выбрать актуальную реплику; маршрут записи через HAProxy временно станет недоступен.</p><code id="experiment-stop-primary">docker compose stop …</code><button data-copy-command="experiment-stop-primary">Копировать команду</button><small>Вернуть: <code id="experiment-start-primary">docker compose start …</code></small></article>
+            <article class="experiment-card"><strong>Потеря etcd</strong><p>Patroni API могут продолжать отвечать, а чтение — работать. Но если режим DCS Failsafe Mode не включён, первичный сервер обычно будет понижен.</p><code id="experiment-stop-etcd">docker compose stop etcd</code><button data-copy-command="experiment-stop-etcd">Копировать команду</button><small>Вернуть: <code>docker compose start etcd</code></small></article>
+          </div>
+          <div class="experiment-observer"><strong>Что сейчас показывает панель</strong><span id="experiment-observation">Определяем состояние…</span></div>
+          <details class="production-guide"><summary>Как проводят такие проверки в рабочей среде</summary><div class="production-guide-body"><p>В рабочей среде отказ воспроизводят только по согласованному плану и в отведённое окно работ. Способ зависит от платформы: управляемое прерывание работы в Kubernetes, остановка виртуальной машины или системной службы, либо контролируемая сетевая изоляция.</p><p>До испытания определяют допустимое время восстановления (RTO), допустимую потерю данных (RPO), способ наблюдения за приложением и порядок аварийного восстановления. Команды <code>docker compose stop …</code> выше предназначены только для этого учебного стенда.</p></div></details>
+        </section>
+
+        <section class="control-task" data-control-view="advanced">
+          <div class="task-heading"><div><span>РЕЖИМ РУЧНОГО ОБСЛУЖИВАНИЯ · PAUSE / RESUME</span><h3>Временно ограничить автоматические действия Patroni</h3></div><b class="risk-level high">ответственность переходит администратору</b></div>
+          <div class="pause-purpose"><strong>Зачем нужен режим обслуживания (pause)</strong><p>Он предназначен для восстановления после повреждений, обновления основной версии или сложной ручной перестройки. Patroni продолжает публиковать состояние и продлевать лидерскую блокировку, но не запускает остановленный узел и не повышает реплику автоматически.</p></div>
+          <div class="pause-guidance"><p><strong>Применяйте:</strong> только когда намеренно управляете PostgreSQL вручную.</p><p><strong>Не применяйте:</strong> для обычного перезапуска, перечитывания конфигурации или планового переключения.</p><p class="pause-risk"><strong>Риск:</strong> Patroni может предупредить о двух первичных серверах, но не обязан устранить это состояние. Перед возобновлением автоматического управления (<code>resume</code>) убедитесь, что первичный сервер только один.</p></div>
+          <div class="button-row"><button data-action="pause" class="danger">Перейти в ручное обслуживание</button><button data-action="resume">Возобновить автоматическое управление</button></div><small id="pause-disabled-reason" class="disabled-reason"></small>
+          <details class="production-guide"><summary>Как включить и выключить режим обслуживания в реальной эксплуатации</summary><div class="production-guide-body"><p><strong>Через patronictl с ожиданием всех участников:</strong></p><div class="command-copy"><code id="prod-pause-cli">patronictl … pause --wait</code><button data-copy-command="prod-pause-cli">Копировать</button></div><div class="command-copy"><code id="prod-resume-cli">patronictl … resume --wait</code><button data-copy-command="prod-resume-cli">Копировать</button></div><p><strong>Тот же запрос через REST API любого доступного Patroni:</strong></p><div class="command-copy"><code id="prod-pause-rest">curl … pause=true</code><button data-copy-command="prod-pause-rest">Копировать</button></div><div class="command-copy"><code id="prod-resume-rest">curl … pause=false</code><button data-copy-command="prod-resume-rest">Копировать</button></div><small>Признак pause хранится в DCS и действует на весь кластер. После работ убедитесь, что первичный сервер только один, и выполните resume.</small></div></details>
+        </section>
+
+        <div id="action-result" class="action-result hidden"></div>
+        <div id="operation-tracker" class="operation-tracker hidden"></div>
+        <section class="operation-history"><div class="section-heading"><div><p class="section-kicker">ТЕКУЩАЯ СЕССИЯ</p><h3>Журнал операций</h3></div><button id="clear-operation-history" class="quiet-button">Очистить</button></div><div id="operation-history" class="operation-history-list"><p class="empty">Операций пока не было.</p></div></section>
+      </section>
+    </section>
+
+    <section class="view" data-view="history">
+      <div class="view-intro"><h2>Что происходило с кластером</h2><p>Графики содержат данные, собранные с момента запуска панели. История линий времени PostgreSQL поступает из Patroni и сохраняется после перезапуска панели.</p></div>
+      <section class="history-grid">
+        <article class="cluster-panel state-history-panel">
+          <div class="section-heading"><div><p class="section-kicker">ПОСЛЕДНИЕ НАБЛЮДЕНИЯ</p><h2>Доступность записи и смена лидера</h2></div><span id="history-window" class="health-pill">—</span></div>
+          <div class="state-chart" id="state-chart" role="img" aria-label="Временная шкала доступности записи и роли лидера"></div>
+          <div class="chart-key"><span><i class="key-line green"></i>запись доступна</span><span><i class="key-line red"></i>запись недоступна</span><span><i class="key-marker"></i>смена лидера</span></div>
+        </article>
+        <article class="cluster-panel lag-history-panel">
+          <div class="section-heading"><div><p class="section-kicker">ОТСТАВАНИЕ РЕПЛИК</p><h2>Полное отставание реплики во времени</h2></div></div>
+          <div class="history-lag-chart" id="history-lag-chart" role="img" aria-label="График отставания реплик"></div>
+        </article>
+      </section>
+      <section class="history-grid lower-history">
+        <article class="cluster-panel observed-events-panel">
+          <div class="section-heading"><div><p class="section-kicker">СОБЫТИЯ СЕАНСА</p><h2>Изменения, замеченные панелью</h2></div></div>
+          <div id="observed-events" class="event-timeline"></div>
+        </article>
+        <article class="cluster-panel history-panel">
+          <div class="section-heading"><div><p class="section-kicker">ДОЛГОВРЕМЕННАЯ ИСТОРИЯ POSTGRESQL</p><h2>История линий времени (timeline)</h2></div></div>
+          <p class="panel-intro">После повышения реплики PostgreSQL создаёт новую линию времени (<code>timeline</code>) — отдельную ветвь истории WAL. Этот список помогает связать смену роли с началом новой ветви.</p>
+          <div class="timeline-guide">
+            <strong>Как использовать эту историю при расследовании</strong>
+            <ol>
+              <li>Найдите время появления новой линии: примерно тогда реплика была повышена до первичного сервера.</li>
+              <li>Сопоставьте его со сменой лидера и недоступностью записи на графике слева.</li>
+              <li>Проверьте, вернулся ли прежний первичный сервер как реплика и находится ли он на текущей линии времени. Другая линия может означать расхождение истории WAL.</li>
+            </ol>
+            <p>Это не журнал SQL-запросов и не аудит данных. Он отвечает на вопрос: «когда кластер начал новую ветвь WAL и в какой точке?»</p>
+          </div>
+          <div id="history" class="history-list"></div>
+        </article>
+      </section>
+    </section>
+
+    <p class="error hidden" id="error"></p>
+  </main>
+
+  <template id="node-template">
+    <article class="node-card compact-node">
+      <div class="node-heading"><div><span class="status-dot"></span><h2 class="node-name"></h2></div><span class="role"></span></div>
+      <div class="alerts hidden"></div>
+      <div class="node-unavailable hidden" data-panel="unavailable"><strong>Узел не отвечает</strong><p></p><small>Остальные блоки скрыты, потому что их значения нельзя считать актуальными. Проверьте контейнер, сеть и Patroni REST API.</small></div>
+      <dl class="key-metrics">
+        <div><dt>Доступ по Patroni REST API</dt><dd data-field="sql-mode" class="sql-mode">проверка…</dd></div>
+        <div><dt>Состояние</dt><dd data-field="state">—</dd></div>
+        <div><dt>Ветвь истории WAL (timeline)</dt><dd data-field="timeline">—</dd></div>
+        <div><dt>PostgreSQL / Patroni</dt><dd><span data-field="version">—</span> / <span data-field="patroni-version">—</span></dd></div>
+        <div><dt>Последний контакт с DCS</dt><dd data-field="dcs-age">—</dd></div>
+        <div><dt>Время работы PostgreSQL</dt><dd data-field="uptime">—</dd></div>
+        <div><dt>Текущая позиция WAL (LSN)</dt><dd data-field="wal">—</dd></div>
+      </dl>
+      <p class="node-error hidden"></p>
+    </article>
+  </template>
+
+  <template id="replication-template">
+    <article class="node-card replication-card">
+      <div class="node-heading"><div><span class="status-dot"></span><h2 class="node-name"></h2></div><span class="role"></span></div>
+      <div class="node-unavailable hidden" data-panel="unavailable"><strong>Состояние репликации неизвестно</strong><p></p><small>Недоступность API не означает нулевое отставание. Сначала восстановите связь с узлом.</small></div>
+      <div class="replication-block"><h3 data-replication-heading>Текущее состояние</h3><p class="replication-context" data-replication-context></p><div class="replication-list"></div></div>
+      <div class="replica-lag hidden">
+        <div class="lag-heading"><div><h3>Из чего складывается отставание</h3><p class="lag-verdict">—</p></div><span class="lag-state">—</span></div>
+        <div class="lsn-flow">
+          <div><span>Первичный сервер</span><strong data-lsn="primary">—</strong></div><b>→</b>
+          <div><span>Получено</span><strong data-lsn="received">—</strong></div><b>→</b>
+          <div><span>Применено</span><strong data-lsn="replayed">—</strong></div>
+        </div>
+        <div class="lag-metrics">
+          <div class="lag-metric receive"><span>Ещё не получено · receive lag</span><strong data-lag="receive">—</strong><div class="meter"><i></i></div></div>
+          <div class="lag-metric apply"><span>Получено, но не применено</span><strong data-lag="apply">—</strong><div class="meter"><i></i></div></div>
+          <div class="lag-metric replay"><span>Полное отставание · replay lag</span><strong data-lag="replay">—</strong><div class="meter"><i></i></div></div>
+        </div>
+        <div class="lag-sampling"><strong data-lag-progress>Сравниваем позиции WAL…</strong><small data-lag-sampled>—</small></div>
+        <p class="lag-threshold">Допустимое отставание при автоматическом выборе · maximum_lag_on_failover: <strong data-lag="threshold">—</strong>. Patroni проверяет также другие условия.</p>
+        <div class="lag-chart" aria-label="История отставания"><svg viewBox="0 0 600 120" preserveAspectRatio="none"><polyline></polyline></svg><div class="chart-caption"></div></div>
+      </div>
+    </article>
+  </template>
+
+  <template id="metrics-template">
+    <article class="node-card metrics-card">
+      <div class="node-heading"><h2 class="node-name"></h2><span class="role"></span></div>
+      <div class="node-unavailable hidden" data-panel="unavailable"><strong>Состояние узла проверить нельзя</strong><p></p><small>Красный статус означает отсутствие свежих данных, а не диагноз конкретной причины.</small></div>
+      <div class="friendly-metrics-grid"></div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
