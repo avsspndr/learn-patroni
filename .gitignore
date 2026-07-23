@@ -1,0 +1,37 @@
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js dependencies and reports
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Docker Compose local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
